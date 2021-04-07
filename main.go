@@ -6,11 +6,11 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/juli3nk/faas-connector-stan/config"
-	"github.com/juli3nk/faas-connector-stan/stan"
+	"github.com/juli3nk/openfaas-connector-stan/config"
+	"github.com/juli3nk/openfaas-connector-stan/stan"
 	nstan "github.com/nats-io/stan.go"
 	"github.com/nats-io/stan.go/pb"
-	"github.com/openfaas-incubator/connector-sdk/types"
+	"github.com/openfaas/connector-sdk/types"
 )
 
 const (

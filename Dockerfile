@@ -1,4 +1,4 @@
-FROM golang:1.14-alpine3.12 AS build
+FROM golang:1.16-alpine3.13 AS build
 
 RUN apk --update add \
 		ca-certificates \
@@ -9,8 +9,8 @@ RUN apk --update add \
 RUN echo 'nobody:x:65534:65534:nobody:/:' > /tmp/passwd \
 	&& echo 'nobody:x:65534:' > /tmp/group
 
-COPY go.mod go.sum /go/src/github.com/juli3nk/faas-connector-stan/
-WORKDIR /go/src/github.com/juli3nk/faas-connector-stan
+COPY go.mod go.sum /go/src/github.com/juli3nk/openfaas-connector-stan/
+WORKDIR /go/src/github.com/juli3nk/openfaas-connector-stan
 
 ENV GO111MODULE on
 RUN go mod download
