@@ -1,4 +1,4 @@
-FROM golang:1.16-alpine3.13 AS build
+FROM golang:alpine AS build
 
 RUN apk --update add \
 		ca-certificates \
@@ -9,15 +9,11 @@ RUN apk --update add \
 RUN echo 'nobody:x:65534:65534:nobody:/:' > /tmp/passwd \
 	&& echo 'nobody:x:65534:' > /tmp/group
 
-COPY go.mod go.sum /go/src/github.com/juli3nk/openfaas-connector-stan/
+COPY . /go/src/github.com/juli3nk/openfaas-connector-stan/
 WORKDIR /go/src/github.com/juli3nk/openfaas-connector-stan
 
 ENV GO111MODULE on
 RUN go mod download
-
-COPY stan stan
-COPY config config
-COPY main.go .
 
 # Stripping via -ldflags "-s -w"
 #RUN CGO_ENABLED=0 GOOS=linux go build -a -ldflags "-s -w" -installsuffix cgo -o /usr/bin/producer

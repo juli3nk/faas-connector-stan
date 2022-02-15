@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 
@@ -14,8 +15,8 @@ import (
 )
 
 const (
-	clusterID = "faas-connector"
-	clientID = "faas-connector-worker"
+	clusterID  = "faas-connector"
+	clientID   = "faas-connector-worker"
 	queueGroup = "faas-connector-worker-group"
 )
 
@@ -33,10 +34,13 @@ func main() {
 	controller := types.NewController(creds, controllerConfig)
 	controller.BeginMapBuilder()
 
+	additionalHeaders := http.Header{}
+	additionalHeaders.Add("X-Served-By", "stan-connector")
+
 	// Broker
 	messageHandler := func(msg *nstan.Msg) {
 		log.Printf("Received topic: %s, message: %s", msg.Subject, string(msg.Data))
-		controller.Invoke(msg.Subject, &msg.Data)
+		controller.Invoke(msg.Subject, &msg.Data, additionalHeaders)
 	}
 
 	stanQueue := stan.STANQueue{
@@ -60,29 +64,37 @@ func main() {
 		log.Panic(err)
 	}
 
-	if err := stanQueue.Subscribe(); err != nil {
-		log.Panic(err)
+	idleConnsClosed := make(chan struct{})
+
+	end := func() {
+		// Do not unsubscribe a durable on exit, except if asked to.
+		if config.BrokerDurable == "" || config.BrokerUnsubscribe {
+			if err := stanQueue.Unsubscribe(); err != nil {
+				log.Panic(err)
+			}
+		}
+		if err := stanQueue.CloseConnection(); err != nil {
+			log.Panicf("Cannot close connection to %s because of an error: %v\n", stanQueue.StanURL, err)
+		}
+
+		close(idleConnsClosed)
 	}
 
-	// Wait for a SIGINT (perhaps triggered by user with CTRL-C)
-	// Run cleanup when signal is received
-	signalChan := make(chan os.Signal, 0)
-	cleanupDone := make(chan bool)
-	signal.Notify(signalChan, os.Interrupt)
+	if err := stanQueue.Subscribe(); err != nil {
+		end()
+		log.Fatal(err)
+	}
+
 	go func() {
-		for range signalChan {
-			fmt.Printf("\nReceived an interrupt, unsubscribing and closing connection...\n\n")
-			// Do not unsubscribe a durable on exit, except if asked to.
-			if config.BrokerDurable == "" || config.BrokerUnsubscribe {
-				if err := stanQueue.Unsubscribe(); err != nil {
-					log.Panic(err)
-				}
-			}
-			if err := stanQueue.CloseConnection(); err != nil {
-				log.Panicf("Cannot close connection to %s because of an error: %v\n", stanQueue.StanURL, err)
-			}
-			cleanupDone <- true
-		}
+		sigint := make(chan os.Signal, 1)
+		signal.Notify(sigint, os.Interrupt)
+		<-sigint
+
+		// We received an interrupt signal, shut down.
+		fmt.Printf("\nReceived an interrupt, unsubscribing and closing connection...\n\n")
+
+		end()
 	}()
-	<-cleanupDone
+
+	<-idleConnsClosed
 }
